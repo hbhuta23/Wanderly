@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import {
   ArrowRight,
@@ -23,11 +23,21 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import ReactMarkdown from "react-markdown"
+import SimpleGlobe from "@/components/SimpleGlobe"
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<string>("chat")
   const [loading, setLoading] = useState(false)
   const [formStep, setFormStep] = useState(0)
+  const [itinerary, setItinerary] = useState<string | null>(null)
+  const [chatMessages, setChatMessages] = useState<{ sender: 'user' | 'ai'; text: string }[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const [isClient, setIsClient] = useState(false)
+  const [mapCoords, setMapCoords] = useState<{ lat: number; lng: number } | null>(null)
+
+  useEffect(() => { setIsClient(true); }, [])
 
   // Form state
   const [form, setForm] = useState({
@@ -49,19 +59,93 @@ export default function Home() {
     }))
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      setLoading(false)
-      // Handle submission result
-    }, 2000)
+  try {
+    const res = await fetch('/api/plan', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        destination: form.destination,
+        dates: [form.startDate, form.endDate],
+        people: form.people,
+        budget: form.budget,
+        preferences: form.preferences.split(',').map(p => p.trim()),
+        visaStatus: form.visaStatus,
+        specialRequests: form.specialRequests,
+      }),
+    });
+
+    const json = await res.json();
+
+    if (!json.success) {
+      throw new Error('Failed to generate itinerary');
+    }
+
+    setItinerary(json.trip.itinerary);
+
+  } catch (err) {
+    console.error(err);
+    alert('Something went wrong. Please try again.');
+  } finally {
+    setLoading(false);
   }
+};
 
   const nextStep = () => setFormStep((prev) => prev + 1)
   const prevStep = () => setFormStep((prev) => prev - 1)
+
+  // Chat send handler
+  const handleChatSend = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const message = chatInput.trim();
+    if (!message) return;
+    setChatMessages((prev) => [...prev, { sender: 'user', text: message }]);
+    setChatInput('');
+    setChatLoading(true);
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      });
+      const json = await res.json();
+      if (json.success && json.reply) {
+        setChatMessages((prev) => [...prev, { sender: 'ai', text: json.reply }]);
+      } else {
+        setChatMessages((prev) => [...prev, { sender: 'ai', text: 'Sorry, something went wrong.' }]);
+      }
+    } catch (err) {
+      setChatMessages((prev) => [...prev, { sender: 'ai', text: 'Sorry, something went wrong.' }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // When itinerary or form.destination changes, geocode the destination
+    const geocode = async () => {
+      const destination = form.destination || '';
+      if (!destination) return;
+      try {
+        const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(destination)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`);
+        const data = await res.json();
+        if (data.status === 'OK' && data.results.length > 0) {
+          const { lat, lng } = data.results[0].geometry.location;
+          setMapCoords({ lat, lng });
+        }
+      } catch (err) {
+        // fallback: do nothing
+      }
+    };
+    if (itinerary) {
+      geocode();
+    }
+  }, [itinerary, form.destination]);
 
   return (
     <div className="min-h-screen bg-[#fdfaf5]">
@@ -248,6 +332,8 @@ export default function Home() {
         </div>
       </header>
 
+      <SimpleGlobe coords={mapCoords} destination={form.destination} />
+
       {/* Enhanced Features Section */}
       <section className="py-16 bg-white relative overflow-hidden">
         {/* Background decorative elements */}
@@ -432,36 +518,68 @@ export default function Home() {
               </TabsList>
 
               <TabsContent value="chat" className="mt-0">
-                <Card className="border-none shadow-xl">
-                  <CardContent className="pt-6">
-                    <div className="flex flex-col space-y-4">
-                      <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-full bg-[#0f766e] flex items-center justify-center text-white text-xs">
-                          W
+                {isClient && (
+                  <Card className="border-none shadow-xl">
+                    <CardContent className="pt-6">
+                      <div className="flex flex-col space-y-4">
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-full bg-[#0f766e] flex items-center justify-center text-white text-xs">
+                            W
+                          </div>
+                          <div className="bg-gray-100 rounded-2xl rounded-tl-none p-3">
+                            Hi there! I'm Wanderly, your AI travel planner. Tell me about your dream trip and I'll help
+                            you plan it.
+                          </div>
                         </div>
-                        <div className="bg-gray-100 rounded-2xl rounded-tl-none p-3">
-                          Hi there! I'm Wanderly, your AI travel planner. Tell me about your dream trip and I'll help
-                          you plan it.
-                        </div>
-                      </div>
 
-                      <div className="mt-4">
-                        <div className="relative">
-                          <Input
-                            placeholder="e.g., I want to visit Bali for 7 days in June with my partner"
-                            className="pr-24 py-6 text-base"
-                          />
-                          <Button className="absolute right-1 top-1 bottom-1 bg-[#0f766e] hover:bg-[#0f766e]/90">
-                            Send <ArrowRight className="ml-2 h-4 w-4" />
-                          </Button>
+                        <div className="mt-4">
+                          <div className="mb-6">
+                            <div className="bg-gray-50 rounded-xl p-4 h-72 overflow-y-auto flex flex-col gap-3 border border-gray-100">
+                              {chatMessages.length === 0 && (
+                                <div className="text-gray-400 text-sm text-center my-auto">Say hi to Wanderly and start planning your trip!</div>
+                              )}
+                              {chatMessages.map((msg, idx) => (
+                                <div key={idx} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                  <div className={`rounded-lg px-3 py-2 max-w-xs text-sm ${msg.sender === 'user' ? 'bg-[#0f766e]/10 text-[#0f766e]' : 'bg-gray-100 text-gray-700'}`}>
+                                    {msg.sender === 'ai' ? (
+                                      <ReactMarkdown>{msg.text}</ReactMarkdown>
+                                    ) : (
+                                      msg.text
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                              {chatLoading && (
+                                <div className="flex justify-start">
+                                  <div className="rounded-lg px-3 py-2 max-w-xs text-sm bg-gray-100 text-gray-500 animate-pulse">Wanderly is typing…</div>
+                                </div>
+                              )}
+                            </div>
+                            <form onSubmit={handleChatSend} className="relative mt-4 flex">
+                              <Input
+                                placeholder="e.g., I want to visit Bali for 7 days in June with my partner"
+                                className="pr-24 py-6 text-base"
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                disabled={chatLoading}
+                              />
+                              <Button
+                                type="submit"
+                                className="absolute right-1 top-1 bottom-1 bg-[#0f766e] hover:bg-[#0f766e]/90"
+                                disabled={chatLoading || !chatInput.trim()}
+                              >
+                                Send <ArrowRight className="ml-2 h-4 w-4" />
+                              </Button>
+                            </form>
+                            <p className="text-xs text-gray-500 mt-2">
+                              Try: "I want to explore Japan for 10 days in April with my family of 4"
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-xs text-gray-500 mt-2">
-                          Try: "I want to explore Japan for 10 days in April with my family of 4"
-                        </p>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                )}
               </TabsContent>
 
               <TabsContent value="quiz" className="mt-0">
@@ -639,6 +757,14 @@ export default function Home() {
                             {loading ? "Creating your plan..." : "Get Your Itinerary"}
                           </Button>
                         </div>
+                        {itinerary && (
+                          <div className="mt-8 p-6 bg-white rounded-xl shadow-md border border-gray-100">
+                            <h3 className="text-2xl font-bold mb-4 text-[#0f766e]">Your AI-Generated Itinerary</h3>
+                            <div className="prose max-w-none">
+                              <ReactMarkdown>{itinerary}</ReactMarkdown>
+                            </div>
+                          </div>
+                        )}
                       </motion.div>
                     )}
                   </CardContent>
