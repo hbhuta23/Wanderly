@@ -7,6 +7,8 @@ const TripPlanSchema = new mongoose.Schema({
   people: Number,
   budget: Number,
   preferences: [String],
+  visaStatus: String,
+  specialRequests: String,
   answers: Object,
   itinerary: Object,         // Or [Object] for day-by-day events
   createdAt: { type: Date, default: Date.now },

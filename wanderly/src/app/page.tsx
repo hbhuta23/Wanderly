@@ -24,7 +24,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import ReactMarkdown from "react-markdown"
-import SimpleGlobe from "@/components/SimpleGlobe"
+import { useRouter } from "next/navigation"
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<string>("chat")
@@ -35,7 +35,7 @@ export default function Home() {
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [isClient, setIsClient] = useState(false)
-  const [mapCoords, setMapCoords] = useState<{ lat: number; lng: number } | null>(null)
+  const router = useRouter()
 
   useEffect(() => { setIsClient(true); }, [])
 
@@ -99,54 +99,6 @@ const handleSubmit = async (e: React.FormEvent) => {
   const nextStep = () => setFormStep((prev) => prev + 1)
   const prevStep = () => setFormStep((prev) => prev - 1)
 
-  // Chat send handler
-  const handleChatSend = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const message = chatInput.trim();
-    if (!message) return;
-    setChatMessages((prev) => [...prev, { sender: 'user', text: message }]);
-    setChatInput('');
-    setChatLoading(true);
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message }),
-      });
-      const json = await res.json();
-      if (json.success && json.reply) {
-        setChatMessages((prev) => [...prev, { sender: 'ai', text: json.reply }]);
-      } else {
-        setChatMessages((prev) => [...prev, { sender: 'ai', text: 'Sorry, something went wrong.' }]);
-      }
-    } catch (err) {
-      setChatMessages((prev) => [...prev, { sender: 'ai', text: 'Sorry, something went wrong.' }]);
-    } finally {
-      setChatLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    // When itinerary or form.destination changes, geocode the destination
-    const geocode = async () => {
-      const destination = form.destination || '';
-      if (!destination) return;
-      try {
-        const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(destination)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`);
-        const data = await res.json();
-        if (data.status === 'OK' && data.results.length > 0) {
-          const { lat, lng } = data.results[0].geometry.location;
-          setMapCoords({ lat, lng });
-        }
-      } catch (err) {
-        // fallback: do nothing
-      }
-    };
-    if (itinerary) {
-      geocode();
-    }
-  }, [itinerary, form.destination]);
-
   return (
     <div className="min-h-screen bg-[#fdfaf5]">
       {/* Hero Section */}
@@ -165,8 +117,8 @@ const handleSubmit = async (e: React.FormEvent) => {
               />
             </div>
             <div className="flex gap-4">
-              <Button variant="ghost">Sign In</Button>
-              <Button>Sign Up</Button>
+              <Button variant="ghost" onClick={() => router.push('/login')}>Sign In</Button>
+              <Button onClick={() => router.push('/signup')}>Sign Up</Button>
             </div>
           </nav>
 
@@ -201,8 +153,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                   size="lg"
                   className="bg-[#0f766e] hover:bg-[#0f766e]/90 text-white"
                   onClick={() => {
-                    setActiveTab("chat")
-                    document.getElementById("plan-section")?.scrollIntoView({ behavior: "smooth" })
+                    router.push("/page2")
                   }}
                 >
                   <MessageSquare className="mr-2 h-4 w-4" /> Chat with Wanderly
@@ -331,8 +282,6 @@ const handleSubmit = async (e: React.FormEvent) => {
           </div>
         </div>
       </header>
-
-      <SimpleGlobe coords={mapCoords} destination={form.destination} />
 
       {/* Enhanced Features Section */}
       <section className="py-16 bg-white relative overflow-hidden">
@@ -494,283 +443,6 @@ const handleSubmit = async (e: React.FormEvent) => {
               Plan Your Trip to Any Destination
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* Plan Your Trip Section */}
-      <section id="plan-section" className="py-16 bg-[#fdfaf5]">
-        <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center mb-4">Plan Your Perfect Trip</h2>
-          <p className="text-center text-gray-600 mb-12 max-w-2xl mx-auto">
-            Choose how you'd like to create your personalized travel itinerary
-          </p>
-
-          <div className="max-w-3xl mx-auto">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-8">
-                <TabsTrigger value="chat" className="data-[state=active]:bg-[#0f766e] data-[state=active]:text-white">
-                  <MessageSquare className="mr-2 h-4 w-4" /> Chat with AI
-                </TabsTrigger>
-                <TabsTrigger value="quiz" className="data-[state=active]:bg-[#ea580c] data-[state=active]:text-white">
-                  <ClipboardCheck className="mr-2 h-4 w-4" /> Take the Quiz
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="chat" className="mt-0">
-                {isClient && (
-                  <Card className="border-none shadow-xl">
-                    <CardContent className="pt-6">
-                      <div className="flex flex-col space-y-4">
-                        <div className="flex items-start gap-3">
-                          <div className="w-8 h-8 rounded-full bg-[#0f766e] flex items-center justify-center text-white text-xs">
-                            W
-                          </div>
-                          <div className="bg-gray-100 rounded-2xl rounded-tl-none p-3">
-                            Hi there! I'm Wanderly, your AI travel planner. Tell me about your dream trip and I'll help
-                            you plan it.
-                          </div>
-                        </div>
-
-                        <div className="mt-4">
-                          <div className="mb-6">
-                            <div className="bg-gray-50 rounded-xl p-4 h-72 overflow-y-auto flex flex-col gap-3 border border-gray-100">
-                              {chatMessages.length === 0 && (
-                                <div className="text-gray-400 text-sm text-center my-auto">Say hi to Wanderly and start planning your trip!</div>
-                              )}
-                              {chatMessages.map((msg, idx) => (
-                                <div key={idx} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                  <div className={`rounded-lg px-3 py-2 max-w-xs text-sm ${msg.sender === 'user' ? 'bg-[#0f766e]/10 text-[#0f766e]' : 'bg-gray-100 text-gray-700'}`}>
-                                    {msg.sender === 'ai' ? (
-                                      <ReactMarkdown>{msg.text}</ReactMarkdown>
-                                    ) : (
-                                      msg.text
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
-                              {chatLoading && (
-                                <div className="flex justify-start">
-                                  <div className="rounded-lg px-3 py-2 max-w-xs text-sm bg-gray-100 text-gray-500 animate-pulse">Wanderly is typing…</div>
-                                </div>
-                              )}
-                            </div>
-                            <form onSubmit={handleChatSend} className="relative mt-4 flex">
-                              <Input
-                                placeholder="e.g., I want to visit Bali for 7 days in June with my partner"
-                                className="pr-24 py-6 text-base"
-                                value={chatInput}
-                                onChange={(e) => setChatInput(e.target.value)}
-                                disabled={chatLoading}
-                              />
-                              <Button
-                                type="submit"
-                                className="absolute right-1 top-1 bottom-1 bg-[#0f766e] hover:bg-[#0f766e]/90"
-                                disabled={chatLoading || !chatInput.trim()}
-                              >
-                                Send <ArrowRight className="ml-2 h-4 w-4" />
-                              </Button>
-                            </form>
-                            <p className="text-xs text-gray-500 mt-2">
-                              Try: "I want to explore Japan for 10 days in April with my family of 4"
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </TabsContent>
-
-              <TabsContent value="quiz" className="mt-0">
-                <Card className="border-none shadow-xl">
-                  <CardContent className="pt-6">
-                    {formStep === 0 && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="space-y-4"
-                      >
-                        <h3 className="text-xl font-medium mb-4">Where would you like to go?</h3>
-
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="destination">Destination</Label>
-                            <div className="relative">
-                              <MapPin className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                              <Input
-                                id="destination"
-                                name="destination"
-                                value={form.destination}
-                                onChange={handleChange}
-                                className="pl-10"
-                                placeholder="e.g. Kyoto, Japan or 'I'm not sure yet'"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="startDate">Start Date</Label>
-                              <Input
-                                id="startDate"
-                                name="startDate"
-                                type="date"
-                                value={form.startDate}
-                                onChange={handleChange}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="endDate">End Date</Label>
-                              <Input
-                                id="endDate"
-                                name="endDate"
-                                type="date"
-                                value={form.endDate}
-                                onChange={handleChange}
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="pt-4 flex justify-end">
-                          <Button onClick={nextStep} className="bg-[#ea580c] hover:bg-[#ea580c]/90">
-                            Continue <ArrowRight className="ml-2 h-4 w-4" />
-                          </Button>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {formStep === 1 && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="space-y-4"
-                      >
-                        <h3 className="text-xl font-medium mb-4">Tell us about your trip</h3>
-
-                        <div className="space-y-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="people">Number of Travelers</Label>
-                              <div className="relative">
-                                <Users className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                                <Input
-                                  id="people"
-                                  name="people"
-                                  type="number"
-                                  min={1}
-                                  value={form.people}
-                                  onChange={handleChange}
-                                  className="pl-10"
-                                />
-                              </div>
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="budget">Budget (USD)</Label>
-                              <div className="relative">
-                                <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                                <Input
-                                  id="budget"
-                                  name="budget"
-                                  type="number"
-                                  min={0}
-                                  value={form.budget}
-                                  onChange={handleChange}
-                                  className="pl-10"
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="preferences">Preferences (comma-separated)</Label>
-                            <Input
-                              id="preferences"
-                              name="preferences"
-                              value={form.preferences}
-                              onChange={handleChange}
-                              placeholder="e.g. museums, food, nature, adventure"
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="visaStatus">Visa Status</Label>
-                            <Input
-                              id="visaStatus"
-                              name="visaStatus"
-                              value={form.visaStatus}
-                              onChange={handleChange}
-                              placeholder="e.g. US citizen (no visa)"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="pt-4 flex justify-between">
-                          <Button variant="outline" onClick={prevStep}>
-                            Back
-                          </Button>
-                          <Button onClick={nextStep} className="bg-[#ea580c] hover:bg-[#ea580c]/90">
-                            Continue <ArrowRight className="ml-2 h-4 w-4" />
-                          </Button>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {formStep === 2 && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="space-y-4"
-                      >
-                        <h3 className="text-xl font-medium mb-4">Any special requests?</h3>
-
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="specialRequests">Special Requests</Label>
-                            <Textarea
-                              id="specialRequests"
-                              name="specialRequests"
-                              value={form.specialRequests}
-                              onChange={handleChange}
-                              rows={4}
-                              placeholder="e.g. one traveler is vegan, need wheelchair accessibility, prefer early morning flights"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="pt-4 flex justify-between">
-                          <Button variant="outline" onClick={prevStep}>
-                            Back
-                          </Button>
-                          <Button
-                            onClick={handleSubmit}
-                            disabled={loading}
-                            className={cn(
-                              "bg-[#ea580c] hover:bg-[#ea580c]/90",
-                              loading && "opacity-70 cursor-not-allowed",
-                            )}
-                          >
-                            {loading ? "Creating your plan..." : "Get Your Itinerary"}
-                          </Button>
-                        </div>
-                        {itinerary && (
-                          <div className="mt-8 p-6 bg-white rounded-xl shadow-md border border-gray-100">
-                            <h3 className="text-2xl font-bold mb-4 text-[#0f766e]">Your AI-Generated Itinerary</h3>
-                            <div className="prose max-w-none">
-                              <ReactMarkdown>{itinerary}</ReactMarkdown>
-                            </div>
-                          </div>
-                        )}
-                      </motion.div>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
           </div>
         </div>
       </section>
